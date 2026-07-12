@@ -25,7 +25,11 @@ dependencies = [
   "httpx>=0.28,<1",
   "pydantic>=2.10,<3",
   "PyYAML>=6,<7",
+  "uvicorn>=0.32,<1",
 ]
+
+[project.scripts]
+hermes-nextcloud-talk = "hermes_nextcloud_talk.cli:main"
 
 [project.optional-dependencies]
 dev = [

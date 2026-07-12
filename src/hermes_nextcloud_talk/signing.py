@@ -13,8 +13,8 @@ class SignatureError(ValueError):
 def verify_inbound_signature(
     *,
     secret: str,
-    random_header: str,
-    signature_header: str,
+    random_header: str | None,
+    signature_header: str | None,
     body: bytes,
 ) -> None:
     """Validate the Talk HMAC over the random header concatenated with raw body."""

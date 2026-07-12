@@ -18,7 +18,7 @@ class TalkSettings(BaseModel):
     allow_all_users: bool = False
     development_mode: bool = False
     require_mention: bool = True
-    mention_patterns: list[str] = Field(default_factory=list)
+    mention_aliases: list[str] = Field(default_factory=list)
 
     @field_validator("base_url")
     @classmethod
@@ -53,8 +53,18 @@ class TalkSettings(BaseModel):
             raise ValueError("allowlist identifiers cannot be empty")
         return normalized
 
+    @field_validator("mention_aliases")
+    @classmethod
+    def normalize_mention_aliases(cls, values: list[str]) -> list[str]:
+        normalized = [value.strip().lower() for value in values]
+        if any(not value.startswith("@") or len(value) == 1 for value in normalized):
+            raise ValueError("mention aliases must start with @ and contain a name")
+        return normalized
+
     @model_validator(mode="after")
     def require_safe_authorization_policy(self) -> TalkSettings:
+        if not self.mention_aliases:
+            self.mention_aliases = [f"@{self.profile.lower()}"]
         if self.allow_all_users and not self.development_mode:
             raise ValueError("allow_all_users requires development_mode")
         if not self.allow_all_users and not (self.allowed_users or self.allowed_rooms):

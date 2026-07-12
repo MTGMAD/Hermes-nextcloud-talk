@@ -1,31 +1,39 @@
 # Hermes Nextcloud Talk
 
-> **Pre-alpha:** This repository is building a profile-aware [Hermes Agent](https://github.com/NousResearch/hermes-agent) gateway plugin for [Nextcloud Talk](https://nextcloud.com/talk/).
+> **Pre-alpha:** A secure webhook gateway that connects [Nextcloud Talk](https://nextcloud.com/talk/) bots to isolated [Hermes Agent](https://github.com/NousResearch/hermes-agent) profiles.
 
-The intended plugin will validate signed Nextcloud Talk bot webhooks, route an authorized message to an isolated Hermes profile, and return the response to the originating Talk conversation. Only the initial HMAC verifier exists today; no webhook listener, replay protection, authorization policy, Hermes dispatch, or outbound Talk client has been released yet.
+Hermes Nextcloud Talk receives a signed Talk bot webhook, validates it before parsing, applies room/user and `@mention` policy, runs exactly one configured Hermes profile in a room/thread-scoped session, and posts the response to the originating Talk conversation.
 
-## Planned capabilities
+## Current status
 
-- Secure HMAC-SHA256 validation for Nextcloud Talk bot webhooks.
-- One Nextcloud Talk bot per isolated Hermes profile.
-- Multiple Hermes bots/profiles in the same Nextcloud Talk group.
-- Room and user allowlists, with mention gating enabled by default in groups.
-- Stable session routing per Talk room; capability-gated routing per Talk thread where supported.
-- A future optional router mode for a single Talk bot to dispatch explicit mentions to several Hermes profiles.
+The local service and core message flow are implemented and tested:
 
-## Status
+- signed inbound HMAC validation over exact raw webhook bytes;
+- safe Talk ActivityStreams message parsing;
+- HTTPS-only endpoint configuration and explicit room/user allowlists;
+- `@`-mention gating for group messages by default;
+- replay/idempotency protection for a single service process;
+- separate Hermes sessions per profile, Talk room, and Talk thread;
+- profile-safe execution through `hermes -p <profile>`;
+- signed outbound Talk bot replies with OCS response validation;
+- loopback-bound ASGI webhook service with `/healthz` and `/webhook` endpoints.
 
-The project is in initial implementation. The current security foundation verifies Nextcloud Talk webhook signatures. It is **not ready for production or installation yet**.
+It is **not production-ready yet**. In particular, the current idempotency store is process-local, so production multi-worker deployment needs a shared durable store. A live bot smoke test against a non-production Talk room is also still required before release.
 
-## Requirements (planned)
+## Server compatibility
 
-- Python 3.10+
-- Hermes Agent
-- A Nextcloud Talk instance with the `bots-v1` capability (initially documented from Nextcloud 27.1 / Talk 17.1)
-- Nextcloud administrator access to install and enable a Talk bot per conversation
-- A stable HTTPS endpoint reachable by the Nextcloud server
+The development target at `https://nc.lowfog.net` was checked through public read-only endpoints:
 
-## Development
+```text
+Nextcloud 33.0.2
+Talk 23.0.6
+bots-v1: supported
+threads: supported
+```
+
+This supports the intended bot response and thread/session-routing model.
+
+## Local development
 
 ```bash
 /opt/homebrew/bin/python3.11 -m venv .venv
@@ -35,9 +43,36 @@ The project is in initial implementation. The current security foundation verifi
 .venv/bin/ruff format --check src tests
 ```
 
-## Security
+## Run the webhook service locally
 
-Do not commit Talk bot secrets, app passwords, room tokens, production request fixtures, or `.env` files. See the implementation plan under `.hermes/plans/` for the project security model and staged delivery plan.
+1. Copy `.env.example` to a local, ignored `.env` file and fill in the values. Do not commit it.
+2. Export those values in your shell using your preferred secret-management approach.
+3. Start the service:
+
+   ```bash
+   .venv/bin/hermes-nextcloud-talk
+   ```
+
+It listens on `127.0.0.1:8790` by default. Verify it locally:
+
+```bash
+curl http://127.0.0.1:8790/healthz
+# {"status":"ok"}
+```
+
+Expose it only through an HTTPS reverse proxy when ready for a real Talk bot. Do not bind the service directly to the public internet.
+
+## Nextcloud Talk requirements
+
+- Python 3.10+
+- Hermes Agent and an existing Hermes profile
+- Nextcloud Talk with `bots-v1`
+- Nextcloud administrator access to install a bot and enable it in a non-production conversation
+- A stable HTTPS callback URL reachable by the Nextcloud server
+
+## Security notes
+
+Never commit Talk bot secrets, app passwords, room tokens, production webhook fixtures, or `.env` files. Use a distinct bot secret per integration instance. The service validates inbound request signatures before parsing data and does not log those secrets.
 
 ## License
 
